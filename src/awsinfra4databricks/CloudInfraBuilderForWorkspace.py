@@ -236,7 +236,6 @@ class CloudInfraBuilderForWorkspace:
             key ='IsBucketNameSpecified',
             before= 'Checks if a name for the DBFS root bucket has been specified', indent=2)
 
-
         # The S3 bucket for DBFS
         self.__cloudFormationTemplate["Resources"].insert(
             pos= len(self.__cloudFormationTemplate["Resources"]),
@@ -318,6 +317,17 @@ class CloudInfraBuilderForWorkspace:
                                        ]
                                     }
                                 }
+                            },
+                            {
+                                "Sid": "Prevent DBFS from accessing Unity Catalog metastore",
+                                "Effect": "Deny",
+                                "Principal": {
+                                    "AWS": "arn:aws:iam::414351767826:root"
+                                },
+                                "Action": ["s3:*"],
+                                "Resource": [
+                                    {"Fn::Sub": "${DBFSRootBucket.Arn}/unity-catalog/*"}
+                                ]
                             }
                         ]
                     }
@@ -330,6 +340,186 @@ class CloudInfraBuilderForWorkspace:
         self.__requiredPrivileges.add("s3:GetBucketPolicy")
         self.__requiredPrivilegesForRollback.add("s3:DeleteBucketPolicy")
 
+        # The storage credential role arn
+        self.__cloudFormationTemplate['Parameters'].insert(
+            pos= len(self.__cloudFormationTemplate['Parameters']),
+            key= 'StorageCredentialIAMRoleArn',
+            value= CommentedMap({
+                    "Description": "The storage credential to be used for the workspace storage. Use the output value of the first pass",
+                    "Type": "String",
+                    "Default": ""
+                }
+            )
+        )
+        self.__cloudFormationTemplate['Parameters'].yaml_set_comment_before_after_key(
+            key ='StorageCredentialIAMRoleArn',
+            before= 'The ARN of the IAM role for the workspace\'s storage. Use the output value after running the script for the first time', indent=2)
+
+        # The ARN condition
+        self.__cloudFormationTemplate['Conditions'].insert(
+            pos= len(self.__cloudFormationTemplate['Conditions']),
+            key= 'IsStorageCredentialArnSpecified',
+            value= CommentedMap({
+                "Fn::Not" : [{
+                    "Fn::Equals" : [
+                        {"Ref" : "StorageCredentialIAMRoleArn"},
+                        ""
+                    ]
+                }]
+            })
+        )
+        self.__cloudFormationTemplate['Conditions'].yaml_set_comment_before_after_key(
+            key ='IsStorageCredentialArnSpecified',
+            before= 'Checks if the ARN for the storage credential has been specified', indent=2)
+
+        # The IAM role for the storage credential
+        self.__cloudFormationTemplate['Resources'].insert(
+            pos= len(self.__cloudFormationTemplate['Resources']),
+            key= 'StorageCredentialIAMRole',
+            value= CommentedMap({
+                "Type": "AWS::IAM::Role",
+                "Properties": {
+                    "Description" : "The IAM role to be used as the storage credential for the Databricks workspace",
+                    "RoleName" : {"Fn::Sub":"${AWS::StackName}-StorageCredential"},
+                    "AssumeRolePolicyDocument" : {
+                        "Version": "2012-10-17",
+                        "Statement": [
+                            {
+                                "Effect": "Allow",
+                                "Principal": {
+                                    "AWS": [
+                                        "arn:aws:iam::414351767826:role/unity-catalog-prod-UCMasterRole-14S5ZJVKOTYTL",
+                                        {"Fn::If":["IsStorageCredentialArnSpecified", {"Ref": "StorageCredentialIAMRoleArn"}, {"Ref": "AWS::NoValue"}]}
+                                    ]
+                                },
+                                "Action": "sts:AssumeRole",
+                                "Condition": {
+                                    "StringEquals": {
+                                        "sts:ExternalId": {"Ref": "DatabricksAccountId"}
+                                    }
+                                }
+                            }
+                        ]
+                    },
+                    "Policies" : [
+                        {
+                            "PolicyName" : {"Fn::Sub":"${AWS::StackName}-StorageCredentialPolicy"},
+                            "PolicyDocument" : {
+                                "Version": "2012-10-17",
+                                "Statement": [
+                                    {
+                                        "Effect": "Allow",
+                                        "Action": ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"],
+                                        "Resource": {"Fn::Sub": "${DBFSRootBucket.Arn}/unity-catalog/*"}
+                                    },
+                                    {
+                                        "Effect": "Allow",
+                                        "Action": ["s3:ListBucket", "s3:GetBucketLocation"],
+                                        "Resource": {"Fn::Sub": "${DBFSRootBucket.Arn}"},
+                                        "Condition": {
+                                            "StringLike": {
+                                                "s3:prefix": "unity-catalog/*"
+                                            }
+                                        }
+                                    },
+                                    {
+                                        "Fn::If": [
+                                            "IsStorageCredentialArnSpecified",
+                                            {
+                                                "Effect": "Allow",
+                                                "Action": [
+                                                    "sts:AssumeRole"
+                                                ],
+                                                "Resource": [{"Ref": "StorageCredentialIAMRoleArn"}]
+                                            },
+                                            {"Ref": "AWS::NoValue"}
+                                        ]
+                                    },
+                                    {
+                                        "Sid": "ManagedFileEventsSetupStatement",
+                                        "Effect": "Allow",
+                                        "Action": [
+                                            "s3:GetBucketNotification",
+                                            "s3:PutBucketNotification",
+                                            "sns:ListSubscriptionsByTopic",
+                                            "sns:GetTopicAttributes",
+                                            "sns:SetTopicAttributes",
+                                            "sns:CreateTopic",
+                                            "sns:TagResource",
+                                            "sns:Publish",
+                                            "sns:Subscribe",
+                                            "sqs:CreateQueue",
+                                            "sqs:DeleteMessage",
+                                            "sqs:ReceiveMessage",
+                                            "sqs:SendMessage",
+                                            "sqs:GetQueueUrl",
+                                            "sqs:GetQueueAttributes",
+                                            "sqs:SetQueueAttributes",
+                                            "sqs:TagQueue",
+                                            "sqs:ChangeMessageVisibility",
+                                            "sqs:PurgeQueue"
+                                        ],
+                                        "Resource": [
+                                            {"Fn::Sub": "${DBFSRootBucket.Arn}"},
+                                            "arn:aws:sqs:*:*:*",
+                                            "arn:aws:sns:*:*:*"
+                                        ]
+                                    },
+                                    {
+                                        "Sid": "ManagedFileEventsListStatement",
+                                        "Effect": "Allow",
+                                        "Action": ["sqs:ListQueues", "sqs:ListQueueTags", "sns:ListTopics"],
+                                        "Resource": "*"
+                                    },
+                                    {
+                                        "Sid": "ManagedFileEventsTeardownStatement",
+                                        "Effect": "Allow",
+                                        "Action": ["sns:Unsubscribe", "sns:DeleteTopic", "sqs:DeleteQueue"],
+                                        "Resource": ["arn:aws:sqs:*:*:*", "arn:aws:sns:*:*:*"]
+                                    }
+                                ]
+                            },
+                        }
+                    ],
+                }
+            })
+        )
+
+        # Add a statement related to the encryption key
+        if self.__customerManagedKeysOptions.usage() in (CustomerManagedKeysOptions.Usage.BOTH, CustomerManagedKeysOptions.Usage.STORAGE):
+            self.__cloudFormationTemplate['Resources']['StorageCredentialIAMRole']['Properties']["Policies"][0]["PolicyDocument"]["Statement"].append(
+                {
+                    "Effect": "Allow",
+                    "Action": ["kms:Decrypt", "kms:Encrypt", "kms:GenerateDataKey*"],
+                    "Resource": [
+                        {"Fn::GetAtt": "EncryptionKey.Arn"}
+                    ]
+                }
+            )
+
+        self.__addTagsToResource("StorageCredentialIAMRole")
+        self.__cloudFormationTemplate['Resources'].yaml_set_comment_before_after_key(key ='StorageCredentialIAMRole', before= '\nThe IAM role corresponding to the storage credential of the workspace', indent=2)
+
+        self.__requiredPrivileges.add("iam:CreateRole")
+        self.__requiredPrivileges.add("iam:GetRole")
+        self.__requiredPrivileges.add("iam:TagRole")
+        self.__requiredPrivileges.add("iam:PutRolePolicy")
+        self.__requiredPrivileges.add("iam:GetRolePolicy")
+        self.__requiredPrivilegesForRollback.add("iam:DeleteRole")
+        self.__requiredPrivilegesForRollback.add("iam:DeleteRolePolicy")
+
+        # The output
+        self.__cloudFormationTemplate["Outputs"].insert(
+            pos= len(self.__cloudFormationTemplate["Outputs"]),
+            key= 'StorageCredentialIAMRole',
+            value= {
+                "Description": "The ARN of the cross account IAM role for the storage credential of the Databricks workspace",
+                "Value": {"Fn::GetAtt": "StorageCredentialIAMRole.Arn"}
+            }
+        )
+        self.__cloudFormationTemplate['Outputs'].yaml_set_comment_before_after_key(
+            key ='StorageCredentialIAMRole',
+            before= 'The cross-account IAM role for the workspace storage credential', indent=2)
 
 
     # Defines the Networking resources

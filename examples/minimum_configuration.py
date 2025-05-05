@@ -25,24 +25,11 @@ try:
     availabilityZonesIndexes = awsSession.getAvailabilityZoneIndexes(aws_region)
     availabilityZonesIndexes = availabilityZonesIndexes[0:2] # Keep the first two only
 
-    # Define the networking setup and parameters
-    networkDesignOptions = NetworkArchitectureDesignOptions(
-        internetAccess=NetworkArchitectureDesignOptions.InternetAccess.HIGH_AVAILABILITY,
-        privateLinkEndpoints=NetworkArchitectureDesignOptions.PrivateLinkEndpoints.ENABLED,
-        dataExfiltrationProtection=NetworkArchitectureDesignOptions.DataExfiltrationProtection.ACTIVATED,
-        vpcArchitecture=NetworkArchitectureDesignOptions.VPCArchitectureMode.HUB_AND_SPOKE
-    )
     networkParameters = NetworkArchitectureParameters(
         vpcCidrStartingAddress = '10.10.0.0',
         maxRunningNodesPerSubnet = 1000,
         availabilityZoneIndexes = availabilityZonesIndexes,
         hubVpcStartingAddress='10.11.0.0'
-    )
-
-    # Define the CMK options
-    customerManagedKeysOptions = CustomerManagedKeysOptions(
-        usage=CustomerManagedKeysOptions.Usage.BOTH,
-        keyAlias='ha-dep-pl-cmk-hubnspoke'
     )
 
     # Define the custom tags that will be added in all resources
@@ -56,13 +43,9 @@ try:
     builder = CloudInfraBuilderForWorkspace(
         databricksAccountId=accountId,
         resourceTags=resourceTags,
-        networkArchitectureDesignOptions=networkDesignOptions,
-        networkArchitectureParameters=networkParameters,
-        customerManagedKeysOptions=customerManagedKeysOptions
+        networkArchitectureParameters=networkParameters
     )
 
-    cloudFormationScript, inlinePolicyDocument = builder.cloudFormationTemplateBodyParametersAndRequiredPermissions()
- 
     cloudFormationScript, inlinePolicyDocument = builder.cloudFormationTemplateBodyParametersAndRequiredPermissions()
     print("Saving the output in the files mininum_configuration.yaml and mininum_configuration.json ")
     cfFile = open("mininum_configuration.yaml", 'w')
@@ -72,33 +55,6 @@ try:
     pFile = open("mininum_configuration.json", 'w')
     pFile.write(json.dumps(inlinePolicyDocument, indent=2))
     pFile.close()
-
-    # # Create or replace the role with these privileges to be used with CloudFormation
-    # roleArn = awsSession.createOrReplaceIamRoleForCloudFormation(
-    #     roleName="CF4DatabricksCloudResourcesForWorkspace-2025-04-16",
-    #     inlinePolicy= inlinePolicyDocument
-    # )
-    # print('Role Arn: ' + roleArn)
-    # print("Waiting for 10 seconds until the role is properly registered")
-    # time.sleep(10)
-
-    # # Retrieving the privileges
-    # print("Testing the privileges")
-    # allowedActions, disallowedActions = awsSession.checkPermissionsForActions(
-    #     inlinePolicyDocument['Statement'][0]['Action'] + inlinePolicyDocument['Statement'][1]['Action'],
-    #     roleArn)
-
-    # if len(disallowedActions) > 0:
-    #     raise Exception("Role does not allow actions")
-    
-    # print("Building the infrastructure")
-    # awsSession.createCloudFormationStack(
-    #     stackName='ha-dep-pl-cmk-hubnspoke',
-    #     templateBody=cloudFormationScript,
-    #     region=aws_region,
-    #     bucketForCFTemplate='temp4cftemplates-eu-west-3-2025-02-23',
-    #     roleArn=roleArn
-    # )
 
 except Exception as e:
     print("Exception caught:")
