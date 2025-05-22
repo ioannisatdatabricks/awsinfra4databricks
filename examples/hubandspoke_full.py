@@ -65,11 +65,11 @@ try:
  
     cloudFormationScript, inlinePolicyDocument = builder.cloudFormationTemplateBodyParametersAndRequiredPermissions()
     print("Saving the output in the files mininum_configuration.yaml and mininum_configuration.json ")
-    cfFile = open("mininum_configuration.yaml", 'w')
+    cfFile = open("hubandspoke_full.yaml", 'w')
     cfFile.write(cloudFormationScript)
     cfFile.close()
 
-    pFile = open("mininum_configuration.json", 'w')
+    pFile = open("hubandspoke_full.json", 'w')
     pFile.write(json.dumps(inlinePolicyDocument, indent=2))
     pFile.close()
 
