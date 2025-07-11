@@ -27,21 +27,18 @@ try:
     # Define the networking setup and parameters
     networkDesignOptions = NetworkArchitectureDesignOptions(
         internetAccess=NetworkArchitectureDesignOptions.InternetAccess.HIGH_AVAILABILITY,
-        privateLinkEndpoints=NetworkArchitectureDesignOptions.PrivateLinkEndpoints.ENABLED,
-        dataExfiltrationProtection=NetworkArchitectureDesignOptions.DataExfiltrationProtection.ACTIVATED,
-        vpcArchitecture=NetworkArchitectureDesignOptions.VPCArchitectureMode.HUB_AND_SPOKE
+        privateLinkEndpoints=NetworkArchitectureDesignOptions.PrivateLinkEndpoints.ENABLED
     )
     networkParameters = NetworkArchitectureParameters(
         vpcCidrStartingAddress = '10.10.0.0',
         maxRunningNodesPerSubnet = 1000,
-        availabilityZoneIndexes = availabilityZonesIndexes,
-        hubVpcStartingAddress='10.11.0.0'
+        availabilityZoneIndexes = availabilityZonesIndexes
     )
 
     # Define the CMK options
     customerManagedKeysOptions = CustomerManagedKeysOptions(
-        usage=CustomerManagedKeysOptions.Usage.BOTH,
-        keyAlias='ha-dep-pl-cmk-hubnspoke'
+        usage=CustomerManagedKeysOptions.Usage.MANAGED_SERVICES,
+        keyAlias='pl-cmk-standard'
     )
 
     # Define the custom tags that will be added in all resources
@@ -63,12 +60,12 @@ try:
     cloudFormationScript, inlinePolicyDocument = builder.cloudFormationTemplateBodyParametersAndRequiredPermissions()
  
     cloudFormationScript, inlinePolicyDocument = builder.cloudFormationTemplateBodyParametersAndRequiredPermissions()
-    print("Saving the output in the files hubandspoke_full.yaml and hubandspoke_full.json ")
-    cfFile = open("hubandspoke_full.yaml", 'w')
+    print("Saving the output in the files enteprise_standard.yaml and enteprise_standard.json ")
+    cfFile = open("enteprise_standard.yaml", 'w')
     cfFile.write(cloudFormationScript)
     cfFile.close()
 
-    pFile = open("hubandspoke_full.json", 'w')
+    pFile = open("enteprise_standard.json", 'w')
     pFile.write(json.dumps(inlinePolicyDocument, indent=2))
     pFile.close()
 

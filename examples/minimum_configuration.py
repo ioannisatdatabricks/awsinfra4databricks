@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
 import traceback
-import time
 import json
 import argparse
 
@@ -28,8 +27,7 @@ try:
     networkParameters = NetworkArchitectureParameters(
         vpcCidrStartingAddress = '10.10.0.0',
         maxRunningNodesPerSubnet = 1000,
-        availabilityZoneIndexes = availabilityZonesIndexes,
-        hubVpcStartingAddress='10.11.0.0'
+        availabilityZoneIndexes = availabilityZonesIndexes
     )
 
     # Define the custom tags that will be added in all resources
